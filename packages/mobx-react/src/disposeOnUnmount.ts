@@ -1,9 +1,6 @@
 import React from "react"
 import { patch } from "./utils/utils"
 
-const reactMajorVersion = Number.parseInt(React.version.split(".")[0])
-let warnedAboutDisposeOnUnmountDeprecated = false
-
 type Disposer = () => void
 
 const protoStoreKey = Symbol("disposeOnUnmountProto")
@@ -49,19 +46,6 @@ export function disposeOnUnmount(
 ): PropertyKey | Disposer | Array<Disposer> | void {
     if (Array.isArray(propertyKeyOrFunction)) {
         return propertyKeyOrFunction.map(fn => disposeOnUnmount(target, fn))
-    }
-
-    if (!warnedAboutDisposeOnUnmountDeprecated) {
-        if (reactMajorVersion >= 18) {
-            console.error(
-                "[mobx-react] disposeOnUnmount is not compatible with React 18 and higher. Don't use it."
-            )
-        } else {
-            console.warn(
-                "[mobx-react] disposeOnUnmount is deprecated. It won't work correctly with React 18 and higher."
-            )
-        }
-        warnedAboutDisposeOnUnmountDeprecated = true
     }
 
     const c = Object.getPrototypeOf(target).constructor
