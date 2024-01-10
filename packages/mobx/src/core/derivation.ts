@@ -7,6 +7,7 @@ import {
     isComputedValue,
     removeObserver
 } from "../internal"
+import { die } from "../errors"
 
 export enum IDerivationState_ {
     // before being run or (outside batch and not being observed)
@@ -141,7 +142,7 @@ export function checkIfStateModificationsAreAllowed(atom: IAtom) {
         !globalState.allowStateChanges &&
         (hasObservers || globalState.enforceActions === "always")
     ) {
-        console.warn(
+        die(
             "[MobX] " +
                 (globalState.enforceActions
                     ? "Since strict-mode is enabled, changing (observed) observable values without using an action is not allowed. Tried to modify: "
