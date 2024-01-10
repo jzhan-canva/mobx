@@ -18,6 +18,13 @@ function runDisposersOnWillUnmount() {
             else prop()
         }
     })
+
+    if (this[protoStoreKey]) {
+        this[protoStoreKey].length = 0
+    }
+    if (this[instStoreKey]) {
+        this[instStoreKey].length = 0
+    }
 }
 
 /**
