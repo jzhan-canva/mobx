@@ -62,9 +62,8 @@ export function makeClassComponentObserver(
 
     if (componentClass[isMobXReactObserverSymbol]) {
         const displayName = getDisplayName(componentClass)
-        console.warn(
-            `The provided component class (${displayName})
-                has already been declared as an observer component.`
+        throw new Error(
+            `The provided component class (${displayName}) has already been declared as an observer component.`
         )
     } else {
         componentClass[isMobXReactObserverSymbol] = true
@@ -134,7 +133,7 @@ export function makeClassComponentObserver(
         admin.mounted = true
 
         // Component instance committed, prevent reaction disposal.
-        observerFinalizationRegistry.unregister(admin)
+        observerFinalizationRegistry.unregister(this)
 
         // We don't set forceUpdate before mount because it requires a reference to `this`,
         // therefore `this` could NOT be garbage collected before mount,
