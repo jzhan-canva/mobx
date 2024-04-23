@@ -103,16 +103,26 @@ export function makeClassComponentObserver(
         )
     }
 
-    prototype.render = function () {
-        Object.defineProperty(this, "render", {
-            // There is no safe way to replace render, therefore it's forbidden.
-            configurable: false,
-            writable: false,
-            value: isUsingStaticRendering()
+    if (__DEV__) {
+        // Backwards compatibility for testing-library/react
+        prototype.render = function () {
+            this.render = isUsingStaticRendering()
                 ? originalRender
                 : createReactiveRender.call(this, originalRender)
-        })
-        return this.render()
+            return this.render()
+        }
+    } else {
+        prototype.render = function () {
+            Object.defineProperty(this, "render", {
+                // There is no safe way to replace render, therefore it's forbidden.
+                configurable: false,
+                writable: false,
+                value: isUsingStaticRendering()
+                    ? originalRender
+                    : createReactiveRender.call(this, originalRender)
+            })
+            return this.render()
+        }
     }
 
     patch(prototype, "componentDidMount", function () {
