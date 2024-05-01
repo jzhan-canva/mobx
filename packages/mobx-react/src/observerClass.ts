@@ -13,6 +13,8 @@ import {
     _observerFinalizationRegistry as observerFinalizationRegistry
 } from "mobx-react-lite"
 import { shallowEqual, patch } from "./utils/utils"
+// @ts-expect-error
+import { runWithPriority } from "react-dom"
 
 const administrationSymbol = Symbol("ObserverAdministration")
 const isMobXReactObserverSymbol = Symbol("isMobXReactObserver")
@@ -241,7 +243,7 @@ function createReaction(admin: ObserverAdministration) {
         try {
             // forceUpdate sets new `props`, since we made it observable, it would `reportChanged`, causing a loop.
             admin.isUpdating = true
-            admin.forceUpdate?.()
+            admin.forceUpdate && runWithPriority(1, admin.forceUpdate)
         } catch (error) {
             admin.reaction?.dispose()
             admin.reaction = null
