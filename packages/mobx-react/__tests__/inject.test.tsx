@@ -443,7 +443,7 @@ describe("inject based context", () => {
 
         const state = new State()
 
-        class ListComponent extends React.PureComponent<any> {
+        class ListComponent extends React.Component<any> {
             render() {
                 listRender++
                 const { items } = this.props
@@ -471,7 +471,7 @@ describe("inject based context", () => {
                 highlight: state.highlight
             }
         })
-        class ItemComponent extends React.PureComponent<any> {
+        class ItemComponent extends React.Component<any> {
             highlight = () => {
                 const { item, highlight } = this.props
                 highlight(item)

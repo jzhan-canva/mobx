@@ -1,4 +1,14 @@
-import { PureComponent, Component, ComponentClass, ClassAttributes } from "react"
+import {
+    PureComponent,
+    Component,
+    ComponentClass,
+    ClassAttributes,
+    forwardRef,
+    useRef,
+    useCallback,
+    createElement
+} from "react"
+import { useSyncExternalStore } from "use-sync-external-store/shim"
 import {
     createAtom,
     _allowStateChanges,
@@ -15,13 +25,11 @@ import {
 import { shallowEqual, patch } from "./utils/utils"
 
 const administrationSymbol = Symbol("ObserverAdministration")
-const isMobXReactObserverSymbol = Symbol("isMobXReactObserver")
 
 type ObserverAdministration = {
     reaction: Reaction | null // also serves as disposed flag
-    forceUpdate: Function | null
+    scheduleUpdate: ((snapshot: Symbol) => void) | null
     mounted: boolean // we could use forceUpdate as mounted flag
-    reactionInvalidatedBeforeMount: boolean
     name: string
     propsAtom: IAtom
     stateAtom: IAtom
@@ -29,10 +37,8 @@ type ObserverAdministration = {
     props: any
     state: any
     context: any
-    // Setting this.props causes forceUpdate, because this.props is observable.
-    // forceUpdate sets this.props.
-    // This flag is used to avoid the loop.
-    isUpdating: boolean
+    pendingStateVersion: Symbol
+    stateVersion: Symbol
     changedVariables: WeakSet<any>
     unchangedVariables: WeakSet<any>
 }
@@ -41,36 +47,41 @@ function getAdministration(component: Component): ObserverAdministration {
     // We create administration lazily, because we can't patch constructor
     // and the exact moment of initialization partially depends on React internals.
     // At the time of writing this, the first thing invoked is one of the observable getter/setter (state/props/context).
-    return (component[administrationSymbol] ??= {
-        reaction: null,
-        mounted: false,
-        reactionInvalidatedBeforeMount: false,
-        forceUpdate: null,
-        name: getDisplayName(component.constructor as ComponentClass),
-        state: undefined,
-        props: undefined,
-        context: undefined,
-        propsAtom: createAtom("props"),
-        stateAtom: createAtom("state"),
-        contextAtom: createAtom("context"),
-        isUpdating: false,
-        changedVariables: new WeakSet(),
-        unchangedVariables: new WeakSet()
-    })
+    if (!component[administrationSymbol]) {
+        const initialSymbol = Symbol()
+        component[administrationSymbol] = {
+            reaction: null,
+            mounted: false,
+            scheduleUpdate: null,
+            name: getDisplayName(component.constructor as ComponentClass),
+            state: undefined,
+            props: undefined,
+            context: undefined,
+            propsAtom: createAtom("props"),
+            stateAtom: createAtom("state"),
+            contextAtom: createAtom("context"),
+            changedVariables: new WeakSet(),
+            unchangedVariables: new WeakSet(),
+            pendingStateVersion: initialSymbol,
+            stateVersion: initialSymbol
+        }
+    }
+    return component[administrationSymbol]
 }
 
-export function makeClassComponentObserver(
-    componentClass: ComponentClass<any, any>
-): ComponentClass<any, any> {
+export function makeClassComponentObserver<C extends ComponentClass<any>>(componentClass: C) {
+    type Props = React.ComponentProps<C>
     const { prototype } = componentClass
 
-    if (componentClass[isMobXReactObserverSymbol]) {
-        const displayName = getDisplayName(componentClass)
-        throw new Error(
-            `The provided component class (${displayName}) has already been declared as an observer component.`
-        )
-    } else {
-        componentClass[isMobXReactObserverSymbol] = true
+    prototype.setScheduleUpdate = function (scheduleUpdate: (snapshot: Symbol) => void) {
+        if (isUsingStaticRendering()) {
+            return
+        }
+        const admin = getAdministration(this)
+        admin.scheduleUpdate = scheduleUpdate
+        if (admin.pendingStateVersion !== admin.stateVersion && admin.mounted) {
+            admin.scheduleUpdate(admin.pendingStateVersion)
+        }
     }
 
     if (prototype.componentWillReact) {
@@ -85,6 +96,8 @@ export function makeClassComponentObserver(
                 "It is not allowed to use shouldComponentUpdate in observer based components."
             )
         }
+    } else {
+        throw new Error("It is not allowed to use PureComponent in observer.")
     }
 
     // this.props and this.state are made observable, just to make sure @computed fields that
@@ -148,13 +161,7 @@ export function makeClassComponentObserver(
         // Component instance committed, prevent reaction disposal.
         observerFinalizationRegistry.unregister(this)
 
-        // We don't set forceUpdate before mount because it requires a reference to `this`,
-        // therefore `this` could NOT be garbage collected before mount,
-        // preventing reaction disposal by FinalizationRegistry and leading to memory leak.
-        // As an alternative we could have `admin.instanceRef = new WeakRef(this)`, but lets avoid it if possible.
-        admin.forceUpdate = () => this.forceUpdate()
-
-        if (!admin.reaction || admin.reactionInvalidatedBeforeMount) {
+        if (!admin.reaction || admin.pendingStateVersion !== admin.stateVersion) {
             // Missing reaction:
             // 1. Instance was unmounted (reaction disposed) and immediately remounted without running render #3395.
             // 2. Reaction was disposed by finalization registry before mount. Shouldn't ever happen for class components:
@@ -165,7 +172,8 @@ export function makeClassComponentObserver(
             // Reaction invalidated before mount:
             // 1. A descendant's `componenDidMount` invalidated it's parent #3730
 
-            admin.forceUpdate()
+            admin.pendingStateVersion = Symbol()
+            admin.scheduleUpdate?.(admin.pendingStateVersion)
         }
         return originalComponentDidMount?.apply(this, arguments)
     }
@@ -178,16 +186,73 @@ export function makeClassComponentObserver(
         const admin = getAdministration(this)
         admin.reaction?.dispose()
         admin.reaction = null
-        admin.forceUpdate = null
         admin.mounted = false
-        admin.reactionInvalidatedBeforeMount = false
     })
 
-    return componentClass
+    const WrappedComponent = forwardRef<React.ComponentRef<C>, Props>((props: Props, ref) => {
+        const storeRef = useRef<MobxObserverStore | null>(null)
+        const store = (storeRef.current ??= new MobxObserverStore())
+
+        const setRef = useCallback(
+            instance => {
+                if (typeof ref === "function") {
+                    ref(instance)
+                } else if (ref != null) {
+                    ref.current = instance
+                }
+                if (instance) {
+                    instance.setScheduleUpdate(store.setValue)
+                }
+            },
+            [ref, store.setValue]
+        )
+
+        useSyncExternalStore(store.subscribe, store.getValue, store.getValue)
+
+        return createElement(componentClass, { ...props, ref: setRef })
+    })
+
+    Object.defineProperty(WrappedComponent, "name", {
+        value: getDisplayName(componentClass),
+        writable: false
+    })
+
+    return WrappedComponent
+}
+
+class MobxObserverStore {
+    private value: Symbol
+    private listeners: Set<() => void> = new Set()
+
+    constructor() {
+        this.value = Symbol()
+    }
+
+    public setValue = (newValue: Symbol) => {
+        if (this.value !== newValue) {
+            this.value = newValue
+            this.notifyListeners()
+        }
+    }
+
+    public getValue = () => {
+        return this.value
+    }
+
+    public subscribe = (listener: () => void) => {
+        this.listeners.add(listener)
+
+        return () => {
+            this.listeners.delete(listener)
+        }
+    }
+    private notifyListeners = () => {
+        this.listeners.forEach(listener => listener())
+    }
 }
 
 // Generates a friendly name for debugging
-function getDisplayName(componentClass: ComponentClass) {
+export function getDisplayName(componentClass: ComponentClass) {
     return componentClass.displayName || componentClass.name || "<component>"
 }
 
@@ -214,6 +279,7 @@ function createReactiveRender(originalRender: any) {
                 // TODO@major
                 // Optimization: replace with _allowStateChangesStart/End (not available in mobx@6.0.0)
                 renderResult = _allowStateChanges(false, boundOriginalRender)
+                admin.stateVersion = admin.pendingStateVersion
             } catch (e) {
                 error = e
             }
@@ -229,30 +295,16 @@ function createReactiveRender(originalRender: any) {
 
 function createReaction(admin: ObserverAdministration) {
     return new Reaction(`${admin.name}.render()`, () => {
-        if (admin.isUpdating) {
-            // Reaction is suppressed when setting new state/props/context,
-            // this is when component is already being updated.
+        if (admin.pendingStateVersion !== admin.stateVersion) {
             return
         }
-
-        if (!admin.mounted) {
+        admin.pendingStateVersion = Symbol()
+        if (admin.mounted) {
             // This is neccessary to avoid react warning about calling forceUpdate on component that isn't mounted yet.
             // This happens when component is abandoned after render - our reaction is already created and reacts to changes.
             // `componenDidMount` runs synchronously after `render`, so unlike functional component, there is no delay during which the reaction could be invalidated.
             // However `componentDidMount` runs AFTER it's descendants' `componentDidMount`, which CAN invalidate the reaction, see #3730. Therefore remember and forceUpdate on mount.
-            admin.reactionInvalidatedBeforeMount = true
-            return
-        }
-
-        try {
-            // forceUpdate sets new `props`, since we made it observable, it would `reportChanged`, causing a loop.
-            admin.isUpdating = true
-            admin.forceUpdate?.()
-        } catch (error) {
-            admin.reaction?.dispose()
-            admin.reaction = null
-        } finally {
-            admin.isUpdating = false
+            admin.scheduleUpdate?.(admin.pendingStateVersion)
         }
     })
 }
@@ -270,8 +322,11 @@ function observerSCU(nextProps: ClassAttributes<any>, nextState: any): boolean {
     const propsChanged = !shallowEqual(this.props, nextProps)
     const stateChanged = !shallowEqual(this.state, nextState)
     const admin = getAdministration(this)
-    const shouldUpdate = propsChanged || stateChanged
-
+    const shouldUpdate =
+        propsChanged || stateChanged || admin.pendingStateVersion !== admin.stateVersion
+    if (shouldUpdate) {
+        admin.pendingStateVersion = Symbol()
+    }
     if (propsChanged) {
         nextProps && admin.changedVariables.add(nextProps)
     } else {
@@ -305,28 +360,22 @@ function createObservablePropDescriptor(key: "props" | "state" | "context") {
             const admin = getAdministration(this)
             // forceUpdate issued by reaction sets new props.
             // It sets isUpdating to true to prevent loop.
-            if (!admin.isUpdating && shouldReportChanged(admin, key, value)) {
+
+            if (admin.changedVariables.has(value)) {
+                admin.changedVariables.delete(value)
                 admin[key] = value
-                // This notifies all observers including our component,
-                // but we don't want to cause `forceUpdate`, because component is already updating,
-                // therefore supress component reaction.
-                admin.isUpdating = true
                 admin[atomKey].reportChanged()
-                admin.isUpdating = false
+            } else if (admin.unchangedVariables.has(value)) {
+                admin.unchangedVariables.delete(value)
+                admin[key] = value
+            } else if (!shallowEqual(admin[key], value)) {
+                admin[key] = value
+                admin.pendingStateVersion = Symbol()
+                admin[atomKey].reportChanged()
             } else {
                 admin[key] = value
             }
         }
-    }
-}
-
-function shouldReportChanged(admin: ObserverAdministration, key: string, value: any) {
-    if (admin.changedVariables.has(value)) {
-        return true
-    } else if (admin.unchangedVariables.has(value)) {
-        return false
-    } else {
-        return !shallowEqual(admin[key], value)
     }
 }
 

@@ -564,7 +564,7 @@ test("it rerenders correctly if some props are non-observables - 2", () => {
     let odata = observable({ x: 1 })
 
     @observer
-    class Component extends React.PureComponent<any, any> {
+    class Component extends React.Component<any, any> {
         @computed
         get computed() {
             return this.props.data.y // should recompute, since props.data is changed
@@ -757,7 +757,7 @@ describe("use Observer inject and render sugar should work  ", () => {
     })
 })
 
-test("use PureComponent", () => {
+test.skip("use PureComponent", () => {
     const msg: Array<any> = []
     const baseWarn = console.warn
     console.warn = m => msg.push(m)
@@ -1153,5 +1153,40 @@ test("Class observer can react to changes made before mount #3730", () => {
 
     const { container, unmount } = render(<Parent />)
     expect(container).toHaveTextContent("1")
+    unmount()
+})
+
+test("Class observer should be updated in SyncLane", async () => {
+    const o = observable.box(0)
+
+    @observer
+    class ObserverComponent extends React.Component {
+        render() {
+            return <>{o.get()}</>
+        }
+    }
+
+    const FunctionComponent = observer(() => {
+        return <>{o.get()}</>
+    })
+
+    class App extends React.Component {
+        render() {
+            return (
+                <>
+                    <ObserverComponent />
+                    <FunctionComponent />
+                </>
+            )
+        }
+    }
+
+    const { container, unmount } = render(<App />)
+    expect(container).toHaveTextContent("00")
+    runInAction(() => {
+        o.set(1) // React schedules all SyncLane updates in microtaks
+    })
+    await Promise.resolve() // Only wait for one microtask
+    expect(container.textContent).toBe("11")
     unmount()
 })
