@@ -69,6 +69,8 @@ function getAdministration(component: Component): ObserverAdministration {
     return component[administrationSymbol]
 }
 
+const classNativeProperties = ["length", "name", "prototype"]
+
 export function makeClassComponentObserver<C extends ComponentClass<any>>(componentClass: C) {
     type Props = React.ComponentProps<C>
     const { prototype } = componentClass
@@ -216,6 +218,16 @@ export function makeClassComponentObserver<C extends ComponentClass<any>>(compon
         value: getDisplayName(componentClass),
         writable: false
     })
+
+    const staticMemberNames = Object.getOwnPropertyNames(componentClass).filter(
+        name => !classNativeProperties.includes(name)
+    )
+
+    for (const name of staticMemberNames) {
+        if (WrappedComponent[name] === undefined) {
+            WrappedComponent[name] = (componentClass as any)[name]
+        }
+    }
 
     return WrappedComponent
 }

@@ -1190,3 +1190,27 @@ test("Class observer should be updated in SyncLane", async () => {
     expect(container.textContent).toBe("11")
     unmount()
 })
+
+test("Class static member still work", () => {
+    @observer
+    class ObserverComponent extends React.Component {
+        static staticProperty = "staticProperty"
+        static staticMethod() {
+            return "staticMethod"
+        }
+        render() {
+            return (
+                <>
+                    {ObserverComponent.staticProperty}
+                    {ObserverComponent.staticMethod()}
+                </>
+            )
+        }
+    }
+
+    const { container, unmount } = render(<ObserverComponent />)
+    expect(container).toHaveTextContent("staticPropertystaticMethod")
+    expect(ObserverComponent.staticProperty).toBe("staticProperty")
+    expect(ObserverComponent.staticMethod()).toBe("staticMethod")
+    unmount()
+})
