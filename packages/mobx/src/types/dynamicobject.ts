@@ -19,7 +19,7 @@ function getAdm(target): ObservableObjectAdministration {
 // and skip either the internal values map, or the base object with its property descriptors!
 const objectProxyTraps: ProxyHandler<any> = {
     has(target: IIsObservableObject, name: PropertyKey): boolean {
-        if (__DEV__ && globalState.trackingDerivation) {
+        if (__DEV__ && globalState.trackingDerivation.length) {
             warnAboutProxyRequirement(
                 "detect new properties using the 'in' operator. Use 'has' from 'mobx' instead."
             )
@@ -67,7 +67,7 @@ const objectProxyTraps: ProxyHandler<any> = {
         return getAdm(target).defineProperty_(name, descriptor) ?? true
     },
     ownKeys(target: IIsObservableObject): ArrayLike<string | symbol> {
-        if (__DEV__ && globalState.trackingDerivation) {
+        if (__DEV__ && globalState.trackingDerivation.length) {
             warnAboutProxyRequirement(
                 "iterate keys to detect added / removed properties. Use 'keys' from 'mobx' instead."
             )

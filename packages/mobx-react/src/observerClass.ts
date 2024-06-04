@@ -228,33 +228,39 @@ function createReactiveRender(originalRender: any) {
 }
 
 function createReaction(admin: ObserverAdministration) {
-    return new Reaction(`${admin.name}.render()`, () => {
-        if (admin.isUpdating) {
-            // Reaction is suppressed when setting new state/props/context,
-            // this is when component is already being updated.
-            return
-        }
+    return new Reaction(
+        `${admin.name}.render()`,
+        () => {
+            if (admin.isUpdating) {
+                // Reaction is suppressed when setting new state/props/context,
+                // this is when component is already being updated.
+                return
+            }
 
-        if (!admin.mounted) {
-            // This is neccessary to avoid react warning about calling forceUpdate on component that isn't mounted yet.
-            // This happens when component is abandoned after render - our reaction is already created and reacts to changes.
-            // `componenDidMount` runs synchronously after `render`, so unlike functional component, there is no delay during which the reaction could be invalidated.
-            // However `componentDidMount` runs AFTER it's descendants' `componentDidMount`, which CAN invalidate the reaction, see #3730. Therefore remember and forceUpdate on mount.
-            admin.reactionInvalidatedBeforeMount = true
-            return
-        }
+            if (!admin.mounted) {
+                // This is neccessary to avoid react warning about calling forceUpdate on component that isn't mounted yet.
+                // This happens when component is abandoned after render - our reaction is already created and reacts to changes.
+                // `componenDidMount` runs synchronously after `render`, so unlike functional component, there is no delay during which the reaction could be invalidated.
+                // However `componentDidMount` runs AFTER it's descendants' `componentDidMount`, which CAN invalidate the reaction, see #3730. Therefore remember and forceUpdate on mount.
+                admin.reactionInvalidatedBeforeMount = true
+                return
+            }
 
-        try {
-            // forceUpdate sets new `props`, since we made it observable, it would `reportChanged`, causing a loop.
-            admin.isUpdating = true
-            admin.forceUpdate?.()
-        } catch (error) {
-            admin.reaction?.dispose()
-            admin.reaction = null
-        } finally {
-            admin.isUpdating = false
-        }
-    })
+            try {
+                // forceUpdate sets new `props`, since we made it observable, it would `reportChanged`, causing a loop.
+                admin.isUpdating = true
+                admin.forceUpdate?.()
+            } catch (error) {
+                admin.reaction?.dispose()
+                admin.reaction = null
+            } finally {
+                admin.isUpdating = false
+            }
+        },
+        undefined,
+        undefined,
+        true
+    )
 }
 
 function observerSCU(nextProps: ClassAttributes<any>, nextState: any): boolean {
@@ -294,6 +300,14 @@ function createObservablePropDescriptor(key: "props" | "state" | "context") {
             const admin = getAdministration(this)
 
             let prevReadState = _allowStateReadsStart(true)
+
+            if (
+                _getGlobalState()
+                    .trackingDerivation.filter(d => d.isReactObserver)
+                    .some(d => d !== admin.reaction)
+            ) {
+                console.error("exp")
+            }
 
             admin[atomKey].reportObserved()
 

@@ -77,7 +77,7 @@ export function executeAction(
 }
 
 export interface IActionRunInfo {
-    prevDerivation_: IDerivation | null
+    prevDerivation_: IDerivation[] | undefined
     prevAllowStateChanges_: boolean
     prevAllowStateReads_: boolean
     notifySpy_: boolean
@@ -106,12 +106,12 @@ export function _startAction(
             arguments: flattenedArgs
         })
     }
-    const prevDerivation_ = globalState.trackingDerivation
-    const runAsAction = !canRunAsDerivation || !prevDerivation_
+    let prevDerivation_
+    const runAsAction = !canRunAsDerivation || globalState.trackingDerivation.length === 0
     startBatch()
     let prevAllowStateChanges_ = globalState.allowStateChanges // by default preserve previous allow
     if (runAsAction) {
-        untrackedStart()
+        prevDerivation_ = untrackedStart()
         prevAllowStateChanges_ = allowStateChangesStart(true)
     }
     const prevAllowStateReads_ = allowStateReadsStart(true)

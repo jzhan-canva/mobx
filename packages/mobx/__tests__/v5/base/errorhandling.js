@@ -4,12 +4,12 @@ const utils = require("../../v5/utils/test-utils")
 
 const { observable, computed, $mobx, autorun } = mobx
 
-const voidObserver = function () { }
+const voidObserver = function () {}
 
 function checkGlobalState() {
     const gs = mobx._getGlobalState()
     expect(gs.isRunningReactions).toBe(false)
-    expect(gs.trackingDerivation).toBe(null)
+    expect(gs.trackingDerivation.length).toEqual(0)
     expect(gs.inBatch).toBe(0)
     expect(gs.allowStateChanges).toBe(!gs.strictMode)
     expect(gs.pendingUnobservations.length).toBe(0)
@@ -148,7 +148,7 @@ test("deny state changes in views", function () {
 
     m.reaction(
         () => z.get(),
-        () => { }
+        () => {}
     )
     expect(
         utils.grabConsole(() => {
@@ -194,7 +194,7 @@ test("deny array change in view", function (done) {
     }).not.toThrow()
     m.reaction(
         () => z.length,
-        () => { }
+        () => {}
     )
 
     expect(
@@ -866,4 +866,4 @@ describe("es5 compat warnings", () => {
     })
 })
 
-test("should throw when adding properties in ES5 compat mode", () => { })
+test("should throw when adding properties in ES5 compat mode", () => {})

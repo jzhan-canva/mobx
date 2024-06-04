@@ -58,6 +58,7 @@ export interface IDerivation extends IDepTreeNode {
      *  warn if the derivation has no dependencies after creation/update
      */
     requiresObservable_?: boolean
+    isReactObserver?: boolean
 }
 
 export class CaughtException {
@@ -128,7 +129,7 @@ export function shouldCompute(derivation: IDerivation): boolean {
 }
 
 export function isComputingDerivation() {
-    return globalState.trackingDerivation !== null // filter out actions inside computations
+    return globalState.trackingDerivation.length > 0 // filter out actions inside computations
 }
 
 export function checkIfStateModificationsAreAllowed(atom: IAtom) {
@@ -175,8 +176,7 @@ export function trackDerivedFunction<T>(derivation: IDerivation, f: () => T, con
     )
     derivation.unboundDepsCount_ = 0
     derivation.runId_ = ++globalState.runId
-    const prevTracking = globalState.trackingDerivation
-    globalState.trackingDerivation = derivation
+    globalState.trackingDerivation.push(derivation)
     globalState.inBatch++
     let result
     if (globalState.disableErrorBoundaries === true) {
@@ -189,7 +189,7 @@ export function trackDerivedFunction<T>(derivation: IDerivation, f: () => T, con
         }
     }
     globalState.inBatch--
-    globalState.trackingDerivation = prevTracking
+    globalState.trackingDerivation.pop()
     bindDependencies(derivation)
 
     warnAboutDerivationWithoutDependencies(derivation)
@@ -305,14 +305,16 @@ export function untracked<T>(action: () => T): T {
     }
 }
 
-export function untrackedStart(): IDerivation | null {
+export function untrackedStart(): IDerivation[] {
     const prev = globalState.trackingDerivation
-    globalState.trackingDerivation = null
+    globalState.trackingDerivation = []
     return prev
 }
 
-export function untrackedEnd(prev: IDerivation | null) {
-    globalState.trackingDerivation = prev
+export function untrackedEnd(prev: IDerivation[] | undefined) {
+    if (prev) {
+        globalState.trackingDerivation = prev
+    }
 }
 
 export function allowStateReadsStart(allowStateReads: boolean) {

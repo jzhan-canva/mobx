@@ -176,7 +176,7 @@ export class ObservableObjectAdministration
     }
 
     get_(key: PropertyKey): any {
-        if (globalState.trackingDerivation && !hasProp(this.target_, key)) {
+        if (globalState.trackingDerivation.length && !hasProp(this.target_, key)) {
             // Key doesn't exist yet, subscribe for it in case it's added later
             this.has_(key)
         }
@@ -218,7 +218,7 @@ export class ObservableObjectAdministration
 
     // Trap for "in"
     has_(key: PropertyKey): boolean {
-        if (!globalState.trackingDerivation) {
+        if (globalState.trackingDerivation.length === 0) {
             // Skip key subscription outside derivation
             return key in this.target_
         }

@@ -26,7 +26,7 @@ export function trace(...args: any[]): void {
 function getAtomFromArgs(args): any {
     switch (args.length) {
         case 0:
-            return globalState.trackingDerivation
+            return globalState.trackingDerivation.at(-1)
         case 1:
             return getAtom(args[0])
         case 2:

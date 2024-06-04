@@ -1546,7 +1546,7 @@ test("603 - transaction should not kill reactions", () => {
     expect(g.inBatch).toEqual(0)
     expect(g.pendingReactions.length).toEqual(0)
     expect(g.pendingUnobservations.length).toEqual(0)
-    expect(g.trackingDerivation).toEqual(null)
+    expect(g.trackingDerivation.length).toEqual(0)
 
     expect(b).toBe(2)
     a.set(3)

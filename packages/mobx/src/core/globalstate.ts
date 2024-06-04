@@ -39,7 +39,7 @@ export class MobXGlobals {
     /**
      * Currently running derivation
      */
-    trackingDerivation: IDerivation | null = null
+    trackingDerivation: IDerivation[] = []
 
     /**
      * Currently running reaction. This determines if we currently have a reactive context.

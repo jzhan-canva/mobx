@@ -135,8 +135,8 @@ export function endBatch() {
 export function reportObserved(observable: IObservable): boolean {
     checkIfStateReadsAreAllowed(observable)
 
-    const derivation = globalState.trackingDerivation
-    if (derivation !== null) {
+    const derivation = globalState.trackingDerivation.at(-1)
+    if (derivation != null) {
         /**
          * Simple optimization, give each derivation run an unique id (runId)
          * Check if last time this observable was accessed the same runId is used

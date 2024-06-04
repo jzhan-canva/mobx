@@ -123,7 +123,7 @@ export class ObservableMap<K = any, V = any>
     }
 
     has(key: K): boolean {
-        if (!globalState.trackingDerivation) {
+        if (globalState.trackingDerivation.length === 0) {
             return this.has_(key)
         }
 

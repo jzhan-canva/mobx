@@ -23,13 +23,19 @@ type ObserverAdministration = {
 }
 
 function createReaction(adm: ObserverAdministration) {
-    adm.reaction = new Reaction(`observer${adm.name}`, () => {
-        adm.stateVersion = Symbol()
-        // onStoreChange won't be available until the component "mounts".
-        // If state changes in between initial render and mount,
-        // `useSyncExternalStore` should handle that by checking the state version and issuing update.
-        adm.onStoreChange?.()
-    })
+    adm.reaction = new Reaction(
+        `observer${adm.name}`,
+        () => {
+            adm.stateVersion = Symbol()
+            // onStoreChange won't be available until the component "mounts".
+            // If state changes in between initial render and mount,
+            // `useSyncExternalStore` should handle that by checking the state version and issuing update.
+            adm.onStoreChange?.()
+        },
+        undefined,
+        undefined,
+        true
+    )
 }
 
 export function useObserver<T>(render: () => T, baseComponentName: string = "observed"): T {

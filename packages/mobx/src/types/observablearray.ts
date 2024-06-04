@@ -483,7 +483,7 @@ export var arrayExtensions = {
     reverse(): any[] {
         // reverse by default mutates in place before returning the result
         // which makes it both a 'derivation' and a 'mutation'.
-        if (globalState.trackingDerivation) {
+        if (globalState.trackingDerivation.length) {
             die(37, "reverse")
         }
         this.replace(this.slice().reverse())
@@ -493,7 +493,7 @@ export var arrayExtensions = {
     sort(): any[] {
         // sort by default mutates in place before returning the result
         // which goes against all good practices. Let's not change the array in place!
-        if (globalState.trackingDerivation) {
+        if (globalState.trackingDerivation.length) {
             die(37, "sort")
         }
         const copy = this.slice()
